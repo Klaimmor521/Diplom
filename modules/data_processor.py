@@ -4,21 +4,41 @@ import streamlit as st
 @st.cache_data
 def load_data(file_path_or_buffer):
     try:
-        df = pd.read_csv(file_path_or_buffer)
-        # Обработка даты (пробуем формат с тире, если нет - обычный)
-        try:
-            df['Дата'] = pd.to_datetime(df['Дата'], format="%d.%m.%Y - %H:%M")
-        except:
-            df['Дата'] = pd.to_datetime(df['Дата'], dayfirst=True)
+        # 1. Проверяем, это загруженный файл (с сайта) или наш тестовый (с компьютера)
+        if hasattr(file_path_or_buffer, 'name'):
+            file_name = file_path_or_buffer.name
+        else:
+            file_name = str(file_path_or_buffer)
+
+        # 2. Читаем файл в зависимости от его расширения
+        if file_name.endswith('.xlsx') or file_name.endswith('.xls'):
+            df = pd.read_excel(file_path_or_buffer)
+        elif file_name.endswith('.csv'):
+            df = pd.read_csv(file_path_or_buffer)
+        else:
+            st.error("❌ Неподдерживаемый формат файла. Загрузите CSV или Excel.")
+            return None
+
+        if 'Тип документа' in df.columns:
+            df = df[df['Тип документа'].isin(['Продажа', 'Установка в заказ'])]
+
+        # Очистка Даты (убираем тире, если оно есть в LiveSklad)
+        df['Дата'] = df['Дата'].astype(str)
+        df['Дата'] = df['Дата'].str.replace('-', '').str.strip()
+        df['Дата'] = pd.to_datetime(df['Дата'], dayfirst=True)
             
         df['Месяц'] = df['Дата'].dt.to_period('M').astype(str)
+        
         return df
+        
     except Exception as e:
+        st.error(f"Ошибка при чтении файла: {e}")
         return None
 
 def classify_smart(row, use_smart_sort):
     if not use_smart_sort:
-        if row['Тип документа'] == 'Продажа': return 'Товар'
+        if row['Тип документа'] == 'Продажа': 
+            return 'Товар'
         return 'Услуга'
         
     name = str(row['Название']).lower()
