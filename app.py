@@ -19,7 +19,7 @@ uploaded_file = st.sidebar.file_uploader("Загрузите отчет LiveSkla
 if uploaded_file is not None:
     df = load_data(uploaded_file)
 else:
-    df = load_data("data/livesklad_export.csv")
+    df = load_data("data/Отчет по товарам и работам.xlsx")
 
 if df is None:
     st.error("❌ Файл данных не найден!")
