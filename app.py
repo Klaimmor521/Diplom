@@ -3,14 +3,22 @@ import pandas as pd
 import seaborn as sns
 import numpy as np
 
+# Обновляем импорты: добавляем новые функции из charts.py
 from modules.data_processor import load_data, classify_smart
-from modules.charts import draw_revenue_bar, draw_top_items_pie, draw_yoy_chart, draw_forecast_chart
+from modules.charts import (
+    draw_revenue_bar, 
+    draw_top_items_pie, 
+    draw_yoy_chart, 
+    draw_forecast_chart, 
+    perform_abc_analysis, 
+    draw_seasonality_chart
+)
 from modules.ml_model import run_prediction
 
 # --- Настройки ---
-st.set_page_config(page_title="Аналитика Сервиса", layout="wide")
+st.set_page_config(page_title="Прогнозирование спроса", layout="wide", page_icon="📊", initial_sidebar_state="expanded")
 st.title("📊 Система прогнозирования и аналитики")
-sns.set_theme(style="whitegrid")
+sns.set_theme(style="darkgrid")
 
 # --- 1. ЗАГРУЗКА ---
 st.sidebar.header("📂 Данные")
@@ -19,54 +27,64 @@ uploaded_file = st.sidebar.file_uploader("Загрузите отчет LiveSkla
 if uploaded_file is not None:
     df = load_data(uploaded_file)
 else:
-    df = load_data("data/Отчет по товарам и работам.xlsx")
+    # Убедись, что тестовый файл существует по этому пути
+    try:
+        df = load_data("data/Отчет по товарам и работам.xlsx")
+    except FileNotFoundError:
+        st.sidebar.error("Тестовый файл не найден. Пожалуйста, загрузите свой отчет.")
+        st.stop()
+
 
 if df is None:
-    st.error("❌ Файл данных не найден!")
+    st.error("❌ Файл данных не может быть загружен. Проверьте формат файла.")
     st.stop()
 
 # --- 2. ФИЛЬТРЫ ---
 st.sidebar.header("⚙️ Настройки фильтрации")
 target_type = st.sidebar.radio(
-    "🎯 Что прогнозировать?",
+    "🎯 Что анализировать?",
     ["Выручка (₽)", "Количество (шт)"], 
-    help="Выберите, в каких единицах строить график: в деньгах (для оценки бюджета) или в штуках (для планирования закупок на склад)."
+    help="Выберите, в каких единицах строить графики: в деньгах (для оценки бюджета) или в штуках (для планирования закупок)."
 )
 
-# Берем правильное название колонки!
 target_col = "Сумма" if target_type == "Выручка (₽)" else "Количество"
 
 st.sidebar.divider()
 use_smart_sort = st.sidebar.checkbox(
-    "Включить умную группировку (Специфика СЦ)", 
+    "Включить умную группировку", 
     value=True, 
-    help="Если включено: программа сама найдет в чеках слова 'Дисплей', 'Чехол' и распределит их по категориям (Запчасти, Аксессуары). Если выключено: оставит как есть в отчете."
+    help="Программа сама найдет в чеках 'Дисплей', 'Чехол' и распределит их по категориям. Если выключено - оставит как в отчете."
 )
 
-# Применяем классификацию
 df['Категория'] = df.apply(lambda row: classify_smart(row, use_smart_sort), axis=1)
-
-unique_categories = df['Категория'].unique()
+unique_categories = sorted(df['Категория'].unique())
 selected_type = st.sidebar.multiselect(
     "1. Выберите категорию:", 
     options=unique_categories, 
     default=unique_categories,
-    help="Оставьте нужные бизнес-направления. Графики перестроятся автоматически."
+    help="Оставьте нужные бизнес-направления. Графики перестроятся."
 )
+
+if not selected_type:
+    st.warning("Пожалуйста, выберите хотя бы одну категорию.")
+    st.stop()
+    
 df_filtered = df[df['Категория'].isin(selected_type)]
 
-# --- ФИЛЬТР ТОВАРОВ ---
-unique_items = df_filtered['Название'].unique()
+unique_items = sorted(df_filtered['Название'].unique())
 selected_items = st.sidebar.multiselect(
     "2. Выберите конкретные позиции:", 
     options=unique_items,
     default=[],
-    help="Оставьте поле пустым, чтобы анализировать всю категорию целиком. Выберите 1-2 товара, чтобы посмотреть прогноз только по ним."
+    help="Оставьте поле пустым, чтобы анализировать всю категорию. Выберите 1-2 товара, чтобы посмотреть прогноз только по ним."
 )
 
-# Магия: если список не пустой, фильтруем. Если пустой - оставляем всё!
 if len(selected_items) > 0:
     df_filtered = df_filtered[df_filtered['Название'].isin(selected_items)]
+
+if df_filtered.empty:
+    st.warning("По выбранным фильтрам нет данных. Попробуйте изменить выбор.")
+    st.stop()
 
 # --- 3. ЭКОНОМИКА ---
 st.sidebar.divider()
@@ -74,7 +92,7 @@ st.sidebar.header("💰 Экономика бизнеса")
 master_percent = st.sidebar.slider(
     "Процент ЗП мастера с услуг (%)", 
     min_value=0, max_value=100, value=40,
-    help="Укажите процент сдельной оплаты мастеров. Эта сумма будет вычитаться из выручки за 'Услуги' при расчете чистой прибыли."
+    help="Укажите процент сдельной оплаты мастеров для расчета чистой прибыли."
 )
 
 # --- 4. ИНТЕРФЕЙС (ОТРИСОВКА) ---
@@ -96,90 +114,104 @@ col1, col2 = st.columns(2)
 col1.metric("Оборот (Выручка)", f"{total_revenue:,.0f} ₽")
 col2.metric(profit_label, f"{final_profit:,.0f} ₽")
 
-# --- ГРАФИКИ ---
 st.divider()
-col_left, col_right = st.columns(2)
-with col_left:
-    st.subheader("Динамика выручки по месяцам")
-    st.pyplot(draw_revenue_bar(df_filtered)) # Вызов из файла charts.py
-with col_right:
-    st.subheader("Топ-10 Популярных позиций")
-    st.pyplot(draw_top_items_pie(df_filtered)) # Вызов из файла charts.py
 
-# --- ТАБЛИЦА ---
-st.divider()
-st.subheader("📋 Детальный отчет")
-with st.expander("Открыть таблицу данных"):
-    st.dataframe(df_filtered, use_container_width=True)
-    st.download_button("📥 Скачать таблицу в CSV", df_filtered.to_csv(index=False).encode('utf-8'), "filtered_report.csv", "text/csv")
+# --- ВКЛАДКИ ДЛЯ ОРГАНИЗАЦИИ КОНТЕНТА ---
+tab1, tab2, tab3 = st.tabs(["📊 Общий обзор", "📈 Детальный анализ", "🔮 Прогнозирование"])
 
-# --- YOY СРАВНЕНИЕ ---
-st.divider()
-st.subheader("📊 Сравнение продаж: Год к Году")
-st.pyplot(draw_yoy_chart(df_filtered)) # Вызов из файла charts.py
+# --- ВКЛАДКА 1: ОБЩИЙ ОБЗОР ---
+with tab1:
+    col_left, col_right = st.columns(2)
+    with col_left:
+        st.subheader("Динамика по месяцам", help="Показывает исторические продажи (в ₽ или шт). Помогает оценить сезонность.")
+        st.pyplot(draw_revenue_bar(df_filtered, target_col)) 
+    with col_right:
+        st.subheader("Топ-10 Популярных позиций", help="Рейтинг самых продаваемых позиций в деньгах или штуках.")
+        st.pyplot(draw_top_items_pie(df_filtered, target_col))
 
-# --- МАШИННОЕ ОБУЧЕНИЕ ---
-st.divider()
-st.subheader("🔮 Прогноз спроса (Linear Regression)")
-df_monthly = df_filtered.groupby('Месяц', as_index=False)[target_col].sum()
+    st.subheader("Сравнение продаж: Год к Году", help="Сравнивает продажи одних и тех же месяцев в разные годы.")
+    st.pyplot(draw_yoy_chart(df_filtered, target_col))
 
-if len(df_monthly) < 3:
-    st.warning("⚠️ Недостаточно данных для прогноза. Нужно минимум 3 месяца.")
-else:
-    future_months = st.slider("🗓 На сколько месяцев вперед сделать прогноз?", 1, 12, 6)
+# --- ВКЛАДКА 2: ДЕТАЛЬНЫЙ АНАЛИЗ ---
+with tab2:
+    st.subheader("📋 Детальный отчет")
+    with st.expander("Открыть таблицу с данными"):
+        st.dataframe(df_filtered, width='stretch')
+        st.download_button("📥 Скачать таблицу в CSV", df_filtered.to_csv(index=False, encoding='utf-8-sig'), "filtered_report.csv", "text/csv")
     
-    # Вся сложная математика спрятана внутри этой одной строки!
-    X, y, future_X, future_pred, r2, mae = run_prediction(df_monthly, target_col, future_months)
-
-    st.markdown("### 📊 Метрики качества модели")
-    col_m1, col_m2 = st.columns(2)
-    col_m1.metric("Точность тренда (R²)", f"{r2:.1f}%", help="Ближе к 100% = отличный прогноз")
-    col_m2.metric("Средняя ошибка (MAE)", f"{mae:.1f}", help=f"На столько {target_type} мы ошибаемся в среднем")
-
-    st.pyplot(draw_forecast_chart(df_monthly, y, future_X, future_pred, target_type))
-
-# --- СОВЕТНИК V2 ---
     st.divider()
-    st.subheader("🧠 Аналитическая сводка и бизнес-рекомендации")
+    st.subheader("📦 ABC-анализ товаров", help="Делит товары на 3 группы: A - самые прибыльные (80% выручки), B - стабильные (15%), C - незначительные (5%).")
+    abc_df = perform_abc_analysis(df_filtered)
     
-    # 1. Оцениваем надежность прогноза (по метрике R2)
-    reliability = "Высокая 🟢" if r2 > 60 else "Средняя 🟡" if r2 > 30 else "Низкая (рынок нестабилен) 🔴"
-
-    # 2. Считаем тренд (сравниваем среднее будущее со средним за последние 3 месяца)
-    avg_fact = np.mean(y[-3:]) if len(y) >= 3 else np.mean(y)
-    avg_forecast = np.mean(future_pred)
-    
-    if avg_fact == 0: avg_fact = 1 # Защита от деления на ноль
-    delta = ((avg_forecast - avg_fact) / avg_fact) * 100
-
-    # 3. Определяем контекст
-    is_services = any(cat in selected_type for cat in ["Услуги", "Услуга"])
-    is_goods = any(cat in selected_type for cat in ["Запчасти", "Аксессуары", "Товар"])
-
-    # 4. Формируем УМНЫЙ вывод
-    if delta < -10:
-        st.error(f"📉 **Тренд: Ожидается СПАД на {abs(delta):.1f}%**")
-        st.write(f"**Надежность прогноза:** {reliability}")
-        st.write("**📝 План действий:**")
-        if is_goods:
-            st.write("📦 **По складу:** Сократите закупки запчастей и аксессуаров. Проведите инвентаризацию и устройте распродажу залежавшегося товара (неликвида), чтобы высвободить замороженные деньги.")
-        if is_services:
-            st.write("👨‍🔧 **По ремонтам:** Ожидается просадка по заказам. Запустите стимулирующие акции (например, 'Бесплатная чистка динамиков при замене экрана') для привлечения трафика.")
-            
-    elif delta > 10:
-        st.success(f"📈 **Тренд: Ожидается РОСТ на {delta:.1f}%**")
-        st.write(f"**Надежность прогноза:** {reliability}")
-        st.write("**📝 План действий:**")
-        if is_goods:
-            st.write("📦 **По складу:** Сформируйте запас ходовых позиций заранее. Свяжитесь с поставщиками для резервирования партий, чтобы избежать пустых полок и отказов клиентам.")
-        if is_services:
-            st.write("👨‍🔧 **По ремонтам:** Возможен наплыв клиентов. Проверьте графики отпусков мастеров. Возможно, потребуется вывести дополнительных сотрудников в смены, чтобы избежать очередей.")
-            
-    else:
-        st.info(f"⚖️ **Тренд: СТАБИЛЬНЫЙ (изменение {delta:+.1f}%)**")
-        st.write(f"**Надежность прогноза:** {reliability}")
-        st.write("**📝 План действий:**")
-        st.write("Работаем в штатном режиме. Поддерживайте стандартный 'несгораемый остаток' на складе и текущий график работы мастеров.")
+    col_a, col_b, col_c = st.columns(3)
+    with col_a:
+        st.success("Группа A (Ключевые)")
+        st.dataframe(abc_df[abc_df['ABC Категория'] == 'A (Ключевые)'], height=300)
+    with col_b:
+        st.warning("Группа B (Стабильные)")
+        st.dataframe(abc_df[abc_df['ABC Категория'] == 'B (Стабильные)'], height=300)
+    with col_c:
+        st.error("Группа C (Незначительные)")
+        st.dataframe(abc_df[abc_df['ABC Категория'] == 'C (Незначительные)'], height=300)
         
-    if r2 < 30:
-        st.caption("⚠️ *Примечание ИИ: Исторические данные имеют сильные хаотичные скачки. Математической модели сложно выявить четкий тренд. Рекомендуется принимать решения с осторожностью и осуществлять закупки мелкими партиями.*")
+    st.divider()
+    st.subheader("📅 Анализ сезонности", help="Показывает, в какие месяцы продажи обычно выше или ниже среднего.")
+    st.pyplot(draw_seasonality_chart(df_filtered, target_col))
+
+# --- ВКЛАДКА 3: ПРОГНОЗИРОВАНИЕ ---
+with tab3:
+    st.subheader("🔮 Прогноз спроса (Linear Regression)")
+    df_monthly = df_filtered.groupby('Месяц', as_index=False)[target_col].sum()
+
+    if len(df_monthly) < 3:
+        st.warning("⚠️ Недостаточно данных для прогноза. Нужно минимум 3 месяца.")
+    else:
+        future_months = st.slider("🗓 На сколько месяцев вперед сделать прогноз?", 1, 12, 6)
+        
+        X, y_values, future_X, future_pred, r2, mae = run_prediction(df_monthly, target_col, future_months)
+
+        st.pyplot(draw_forecast_chart(df_monthly, df_monthly[target_col], future_X, future_pred, target_type))
+
+        st.markdown("##### 📊 Метрики качества модели")
+        col_m1, col_m2 = st.columns(2)
+        col_m1.metric("Точность тренда (R²)", f"{r2:.1f}%", help="Насколько хорошо линия тренда описывает исторические данные. Ближе к 100% = лучше.")
+        col_m2.metric("Средняя ошибка (MAE)", f"{mae:,.0f}", help=f"В среднем, прогноз ошибается на это количество {target_type.lower()}.")
+        
+        st.divider()
+        st.subheader("🧠 Аналитическая сводка и бизнес-рекомендации")
+        
+        avg_fact = np.mean(y_values[-3:]) if len(y_values) >= 3 else np.mean(y_values)
+        avg_forecast = np.mean(future_pred)
+        if avg_fact == 0: avg_fact = 1 
+        delta = ((avg_forecast - avg_fact) / avg_fact) * 100
+
+        types_to_check = selected_type if len(selected_type) > 0 else unique_categories
+        is_services = any(cat in types_to_check for cat in ["Услуги", "Услуга"])
+        is_goods = any(cat in types_to_check for cat in ["Запчасти", "Аксессуары", "Товар", "Прочее"])
+        
+        if delta > 10:
+            st.success(f"📈 **Тренд: Уверенный РОСТ на ~{delta:.0f}%**")
+            st.write("**📝 План действий:**")
+            if target_col == "Количество":
+                if is_goods: st.write("📦 **Склад:** Увеличьте объем закупок. Создайте страховой запас (+15-20%).")
+                if is_services: st.write("👨‍🔧 **Персонал:** Прогнозируется рост потока клиентов. Проверьте график мастеров.")
+            else:
+                st.write("💰 **Бюджет:** Ожидается рост денежного потока. Благоприятный период для инвестиций.")
+        elif delta < -10:
+            st.error(f"📉 **Тренд: Прогнозируется СПАД на ~{abs(delta):.0f}%**")
+            st.write("**📝 План действий:**")
+            if target_col == "Количество":
+                if is_goods: st.write("📦 **Склад:** Приостановите закупки. Распродавайте остатки.")
+                if is_services: st.write("👨‍🔧 **Персонал:** Загрузка мастеров может упасть. Запустите акции/скидки.")
+            else:
+                st.write("💰 **Бюджет:** Ожидается снижение выручки. Оптимизируйте расходы.")
+        else:
+            st.info(f"⚖️ **Тренд: СТАБИЛЬНЫЙ (изменение {delta:+.1f}%)**")
+            st.write("**📝 План действий:**")
+            if target_col == "Количество":
+                st.write("Поддерживайте стандартный уровень запасов.")
+            else:
+                st.write("Финансовые показатели стабильны. Придерживайтесь текущего плана.")
+            
+        if r2 < 30:
+            st.caption("⚠️ *Примечание: Исторические данные нестабильны. Модели сложно выявить четкий тренд. Рекомендуется принимать решения с осторожностью.*")

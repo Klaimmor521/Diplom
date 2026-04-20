@@ -20,7 +20,7 @@ def load_data(file_path_or_buffer):
             return None
 
         if 'Тип документа' in df.columns:
-            df = df[df['Тип документа'].isin(['Продажа', 'Установка в заказ'])]
+            df = df[df['Тип документа'].isin(['Продажа', 'Установка в заказ', 'Заказ'])].copy()
 
         # Очистка Даты (убираем тире, если оно есть в LiveSklad)
         df['Дата'] = df['Дата'].astype(str)
@@ -28,6 +28,12 @@ def load_data(file_path_or_buffer):
         df['Дата'] = pd.to_datetime(df['Дата'], dayfirst=True)
             
         df['Месяц'] = df['Дата'].dt.to_period('M').astype(str)
+
+        if df['Валовая прибыль (руб)'].dtype == object: # Если прочиталось как текст
+            df['Валовая прибыль (руб)'] = df['Валовая прибыль (руб)'].astype(str).str.replace(',', '.').astype(float)
+            
+        if df['Сумма'].dtype == object:
+            df['Сумма'] = df['Сумма'].astype(str).str.replace(',', '.').astype(float)
         
         return df
         
