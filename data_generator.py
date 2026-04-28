@@ -4,7 +4,6 @@ import random
 from datetime import datetime, timedelta
 import sys
 
-# Кодировка для консоли
 sys.stdout.reconfigure(encoding='utf-8')
 
 def generate_livesklad_exact_copy():

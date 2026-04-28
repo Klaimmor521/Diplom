@@ -3,7 +3,7 @@ import seaborn as sns
 
 sns.set_theme(style="whitegrid", palette="muted")
 
-# --- 1. ГИСТОГРАММА ВЫРУЧКИ ПО МЕСЯЦАМ ---
+# --- 1. Гистограмма выручки по месяцам ---
 def draw_revenue_bar(df_filtered, target_col):
     monthly_sales = df_filtered.groupby('Месяц')[target_col].sum().reset_index()
     fig, ax = plt.subplots(figsize=(8, 6))
@@ -28,9 +28,9 @@ def draw_revenue_bar(df_filtered, target_col):
     sns.despine(left=True)
     return fig
 
-# --- 2. КРУГОВАЯ ДИАГРАММА (ТОП-10) ---
+# --- 2. Круговая диаграмма (Топ-10) ---
 def draw_top_items_pie(df_filtered, target_col):
-    # Теперь группируем не жестко по 'Сумма', а по выбранной колонке
+    # Группируем по выбранной колонке
     top_items = df_filtered.groupby('Название')[target_col].sum().nlargest(10)
     fig, ax = plt.subplots(figsize=(10, 6))
     
@@ -58,7 +58,7 @@ def draw_top_items_pie(df_filtered, target_col):
     
     return fig
 
-# --- 3. СРАВНЕНИЕ ГОД К ГОДУ (YoY) ---
+# --- 3. Сравнение год к году (YoY) ---
 def draw_yoy_chart(df_filtered, target_col):
     df_yoy = df_filtered.copy()
     df_yoy['Год'] = df_yoy['Дата'].dt.year
@@ -82,7 +82,7 @@ def draw_yoy_chart(df_filtered, target_col):
     sns.despine(left=True)
     return fig
 
-# --- 4. ПРОГНОЗ С ЗАЛИВКОЙ (Area Chart) ---
+# --- 4. Прогноз с заливкой (Area Chart) ---
 def draw_forecast_chart(df_monthly, y, future_X, future_pred, target_type):
     fig, ax = plt.subplots(figsize=(8, 5))
 
@@ -112,14 +112,14 @@ def draw_forecast_chart(df_monthly, y, future_X, future_pred, target_type):
 
 # --- 5. ABC ---
 def perform_abc_analysis(df_filtered):
-    # 1. Считаем выручку по каждому товару
+    # Считаем выручку по каждому товару
     item_revenue = df_filtered.groupby('Название')['Сумма'].sum().sort_values(ascending=False).reset_index()
     
-    # 2. Считаем долю каждого товара и накопительную долю
+    # Считаем долю каждого товара и накопительную долю
     item_revenue['Доля'] = item_revenue['Сумма'] / item_revenue['Сумма'].sum()
     item_revenue['Накопительная доля'] = item_revenue['Доля'].cumsum()
     
-    # 3. Присваиваем категории A, B, C
+    # Присваиваем категории A, B, C
     def assign_abc_category(share):
         if share <= 0.8:
             return 'A (Ключевые)'
@@ -137,7 +137,7 @@ def draw_seasonality_chart(df_filtered, target_col):
     df_season['Номер_месяца'] = df_season['Дата'].dt.month
     
     fig, ax = plt.subplots(figsize=(8, 4))
-    sns.boxplot(data=df_season, x='Номер_месяца', y=target_col, ax=ax, hue='Номер_месяца', palette="coolwarm", legend=False)
+    sns.boxplot(data=df_season, x='Номер_месяца', y=target_col, ax=ax, hue='Номер_месяца', palette="coolwarm", legend=False, showfliers=False)
     
     ax.set_xlabel("Месяц")
     ylabel_text = "Выручка (руб)" if target_col == "Сумма" else "Количество (шт)"

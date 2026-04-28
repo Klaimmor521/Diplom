@@ -4,13 +4,12 @@ import streamlit as st
 @st.cache_data
 def load_data(file_path_or_buffer):
     try:
-        # 1. Проверяем, это загруженный файл (с сайта) или наш тестовый (с компьютера)
+        # Проверяем, это загруженный файл или тестовый
         if hasattr(file_path_or_buffer, 'name'):
             file_name = file_path_or_buffer.name
         else:
             file_name = str(file_path_or_buffer)
 
-        # 2. Читаем файл в зависимости от его расширения
         if file_name.endswith('.xlsx') or file_name.endswith('.xls'):
             df = pd.read_excel(file_path_or_buffer)
         elif file_name.endswith('.csv'):
@@ -22,7 +21,7 @@ def load_data(file_path_or_buffer):
         if 'Тип документа' in df.columns:
             df = df[df['Тип документа'].isin(['Продажа', 'Установка в заказ', 'Заказ'])].copy()
 
-        # Очистка Даты (убираем тире, если оно есть в LiveSklad)
+        # Очистка Даты
         df['Дата'] = df['Дата'].astype(str)
         df['Дата'] = df['Дата'].str.replace('-', '').str.strip()
         df['Дата'] = pd.to_datetime(df['Дата'], dayfirst=True)

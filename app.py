@@ -1,9 +1,7 @@
 import streamlit as st
-import pandas as pd
 import seaborn as sns
 import numpy as np
 
-# Обновляем импорты: добавляем новые функции из charts.py
 from modules.data_processor import load_data, classify_smart
 from modules.charts import (
     draw_revenue_bar, 
@@ -16,53 +14,53 @@ from modules.charts import (
 from modules.ml_model import run_prediction
 
 # --- Настройки ---
-st.set_page_config(page_title="Прогнозирование спроса", layout="wide", page_icon="📊", initial_sidebar_state="expanded")
-st.title("📊 Система прогнозирования и аналитики")
+st.set_page_config(page_title="Прогнозирование спроса", layout="wide", initial_sidebar_state="expanded")
+st.title("Система прогнозирования и аналитики")
 sns.set_theme(style="darkgrid")
 
-# --- 1. ЗАГРУЗКА ---
+# --- Загрузка ---
 st.sidebar.header("📂 Данные")
 uploaded_file = st.sidebar.file_uploader("Загрузите отчет LiveSklad", type=["csv", "xlsx"])
 
-if uploaded_file is not None:
-    df = load_data(uploaded_file)
-else:
-    # Убедись, что тестовый файл существует по этому пути
-    try:
-        df = load_data("data/Отчет по товарам и работам.xlsx")
-    except FileNotFoundError:
-        st.sidebar.error("Тестовый файл не найден. Пожалуйста, загрузите свой отчет.")
-        st.stop()
+with st.spinner("Загрузка данных..."):
+    if uploaded_file is not None:
+        df = load_data(uploaded_file)
+    else:
+        try:
+            df = load_data("data/Отчет по товарам и работам.xlsx")
+        except FileNotFoundError:
+            st.sidebar.error("Тестовый файл не найден. Пожалуйста, загрузите свой отчет.")
+            st.stop()
 
 
 if df is None:
     st.error("❌ Файл данных не может быть загружен. Проверьте формат файла.")
     st.stop()
 
-# --- 2. ФИЛЬТРЫ ---
+# --- Фильтры---
 st.sidebar.header("⚙️ Настройки фильтрации")
 target_type = st.sidebar.radio(
-    "🎯 Что анализировать?",
+    "Основной показатель для анализа:",
     ["Выручка (₽)", "Количество (шт)"], 
-    help="Выберите, в каких единицах строить графики: в деньгах (для оценки бюджета) или в штуках (для планирования закупок)."
+    help="Определяет единицы измерения для всех графиков и прогнозов: денежные (₽) или количественные (шт)."
 )
 
 target_col = "Сумма" if target_type == "Выручка (₽)" else "Количество"
 
 st.sidebar.divider()
 use_smart_sort = st.sidebar.checkbox(
-    "Включить умную группировку", 
+    "Применить смарт-категоризацию", 
     value=True, 
-    help="Программа сама найдет в чеках 'Дисплей', 'Чехол' и распределит их по категориям. Если выключено - оставит как в отчете."
+    help="Активирует алгоритм автоматического распределения номенклатуры по бизнес-категориям (Услуги, Запчасти, Аксессуары)."
 )
 
 df['Категория'] = df.apply(lambda row: classify_smart(row, use_smart_sort), axis=1)
 unique_categories = sorted(df['Категория'].unique())
 selected_type = st.sidebar.multiselect(
-    "1. Выберите категорию:", 
+    "Фильтр по категориям:", 
     options=unique_categories, 
     default=unique_categories,
-    help="Оставьте нужные бизнес-направления. Графики перестроятся."
+    help="Выберите одну или несколько категорий для построения отчетов."
 )
 
 if not selected_type:
@@ -73,10 +71,10 @@ df_filtered = df[df['Категория'].isin(selected_type)]
 
 unique_items = sorted(df_filtered['Название'].unique())
 selected_items = st.sidebar.multiselect(
-    "2. Выберите конкретные позиции:", 
+    "Фильтр по номенклатуре:", 
     options=unique_items,
     default=[],
-    help="Оставьте поле пустым, чтобы анализировать всю категорию. Выберите 1-2 товара, чтобы посмотреть прогноз только по ним."
+    help="Оставьте поле пустым для анализа всей категории или выберите конкретные позиции для детального отчета."
 )
 
 if len(selected_items) > 0:
@@ -86,7 +84,7 @@ if df_filtered.empty:
     st.warning("По выбранным фильтрам нет данных. Попробуйте изменить выбор.")
     st.stop()
 
-# --- 3. ЭКОНОМИКА ---
+# --- Экономика ---
 st.sidebar.divider()
 st.sidebar.header("💰 Экономика бизнеса")
 master_percent = st.sidebar.slider(
@@ -95,9 +93,9 @@ master_percent = st.sidebar.slider(
     help="Укажите процент сдельной оплаты мастеров для расчета чистой прибыли."
 )
 
-# --- 4. ИНТЕРФЕЙС (ОТРИСОВКА) ---
-st.subheader("💰 Финансовые показатели")
-show_net_profit = st.toggle("Показать расчетную чистую прибыль (с вычетом ЗП мастеров)")
+# --- Интерфейс ---
+st.subheader("Финансовые показатели")
+show_net_profit = st.toggle("Расчет чистой прибыли с учетом ФОТ")
 
 total_revenue = df_filtered['Сумма'].sum()
 total_gross_profit = df_filtered['Валовая прибыль (руб)'].sum()
@@ -116,10 +114,10 @@ col2.metric(profit_label, f"{final_profit:,.0f} ₽")
 
 st.divider()
 
-# --- ВКЛАДКИ ДЛЯ ОРГАНИЗАЦИИ КОНТЕНТА ---
-tab1, tab2, tab3 = st.tabs(["📊 Общий обзор", "📈 Детальный анализ", "🔮 Прогнозирование"])
+# --- Вкладки ---
+tab1, tab2, tab3 = st.tabs(["Общий обзор", "Детальный анализ", "Прогнозирование"])
 
-# --- ВКЛАДКА 1: ОБЩИЙ ОБЗОР ---
+# --- Вкладка 1: общий обзор ---
 with tab1:
     col_left, col_right = st.columns(2)
     with col_left:
@@ -132,15 +130,15 @@ with tab1:
     st.subheader("Сравнение продаж: Год к Году", help="Сравнивает продажи одних и тех же месяцев в разные годы.")
     st.pyplot(draw_yoy_chart(df_filtered, target_col))
 
-# --- ВКЛАДКА 2: ДЕТАЛЬНЫЙ АНАЛИЗ ---
+# --- Вкладка 1: детальный анализ ---
 with tab2:
-    st.subheader("📋 Детальный отчет")
+    st.subheader("Детальный отчет")
     with st.expander("Открыть таблицу с данными"):
         st.dataframe(df_filtered, width='stretch')
         st.download_button("📥 Скачать таблицу в CSV", df_filtered.to_csv(index=False, encoding='utf-8-sig'), "filtered_report.csv", "text/csv")
     
     st.divider()
-    st.subheader("📦 ABC-анализ товаров", help="Делит товары на 3 группы: A - самые прибыльные (80% выручки), B - стабильные (15%), C - незначительные (5%).")
+    st.subheader("ABC-анализ товаров", help="Делит товары на 3 группы: A - самые прибыльные (80% выручки), B - стабильные (15%), C - незначительные (5%).")
     abc_df = perform_abc_analysis(df_filtered)
     
     col_a, col_b, col_c = st.columns(3)
@@ -155,30 +153,30 @@ with tab2:
         st.dataframe(abc_df[abc_df['ABC Категория'] == 'C (Незначительные)'], height=300)
         
     st.divider()
-    st.subheader("📅 Анализ сезонности", help="Показывает, в какие месяцы продажи обычно выше или ниже среднего.")
+    st.subheader("Анализ сезонности", help="Показывает, в какие месяцы продажи обычно выше или ниже среднего.")
     st.pyplot(draw_seasonality_chart(df_filtered, target_col))
 
-# --- ВКЛАДКА 3: ПРОГНОЗИРОВАНИЕ ---
+# --- Вкладка 1: прогнозирование ---
 with tab3:
-    st.subheader("🔮 Прогноз спроса (Linear Regression)")
+    st.subheader("Прогноз спроса")
     df_monthly = df_filtered.groupby('Месяц', as_index=False)[target_col].sum()
 
     if len(df_monthly) < 3:
         st.warning("⚠️ Недостаточно данных для прогноза. Нужно минимум 3 месяца.")
     else:
-        future_months = st.slider("🗓 На сколько месяцев вперед сделать прогноз?", 1, 12, 6)
+        future_months = st.slider("Горизонт прогнозирования (месяцы):", 1, 12, 6)
         
         X, y_values, future_X, future_pred, r2, mae = run_prediction(df_monthly, target_col, future_months)
 
         st.pyplot(draw_forecast_chart(df_monthly, df_monthly[target_col], future_X, future_pred, target_type))
 
-        st.markdown("##### 📊 Метрики качества модели")
+        st.markdown("##### Метрики качества модели")
         col_m1, col_m2 = st.columns(2)
-        col_m1.metric("Точность тренда (R²)", f"{r2:.1f}%", help="Насколько хорошо линия тренда описывает исторические данные. Ближе к 100% = лучше.")
-        col_m2.metric("Средняя ошибка (MAE)", f"{mae:,.0f}", help=f"В среднем, прогноз ошибается на это количество {target_type.lower()}.")
+        col_m1.metric("Точность тренда (R²)", f"{r2:.1f}%", help="Коэффициент детерминации (R²). Показывает, какой процент дисперсии исходных данных объясняется моделью. Значение, близкое к 100%, указывает на высокую точность тренда.")
+        col_m2.metric("Средняя ошибка (MAE)", f"{mae:,.0f}", help=f"Средняя абсолютная ошибка (MAE). Показывает среднее абсолютное отклонение прогнозируемых значений от фактических в тех же единицах измерения (₽ или шт).")
         
         st.divider()
-        st.subheader("🧠 Аналитическая сводка и бизнес-рекомендации")
+        st.subheader("Аналитическая сводка и бизнес-рекомендации")
         
         avg_fact = np.mean(y_values[-3:]) if len(y_values) >= 3 else np.mean(y_values)
         avg_forecast = np.mean(future_pred)
