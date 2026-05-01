@@ -18,13 +18,18 @@ def load_data(file_path_or_buffer):
             st.error("❌ Неподдерживаемый формат файла. Загрузите CSV или Excel.")
             return None
 
-        if 'Тип документа' in df.columns:
-            df = df[df['Тип документа'].isin(['Продажа', 'Установка в заказ', 'Заказ'])].copy()
+        df = df[df['Тип документа'].isin(['Продажа', 'Установка в заказ', 'Заказ'])].copy()
+
+        if 'Статус' in df.columns:
+            # Заполняем пустые статусы, чтобы они не мешали фильтрации
+            df['Статус'].fillna('', inplace=True) 
+            df = df[ (df['Тип документа'] == 'Продажа') | (df['Статус'] == 'Выдан') ]
 
         # Очистка Даты
-        df['Дата'] = df['Дата'].astype(str)
-        df['Дата'] = df['Дата'].str.replace('-', '').str.strip()
-        df['Дата'] = pd.to_datetime(df['Дата'], dayfirst=True)
+        df['Дата'] = df['Дата'].astype(str).str.split(' - ').str[0].str.strip()
+        df['Дата'] = pd.to_datetime(df['Дата'], format='%d.%m.%Y', errors='coerce')
+        # Удаляем строки, где дату не удалось распарсить
+        df = df.dropna(subset=['Дата'])
             
         df['Месяц'] = df['Дата'].dt.to_period('M').astype(str)
 

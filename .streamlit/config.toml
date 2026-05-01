@@ -3,9 +3,5 @@ primaryColor="#10B981"
 backgroundColor="#0D1B1E"
 secondaryBackgroundColor="#192A2F"
 textColor="#E2E8F0"
-widgetBackgroundColor="#192A2F"
-widgetBorderColor="#192A2F"
-skeletonBackgroundColor="#192A2F"
 
-# Исправленная строка для подключения шрифта Inter
 font = "Inter:https://fonts.googleapis.com/css2?family=Inter&display=swap, sans-serif"

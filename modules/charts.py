@@ -1,7 +1,8 @@
 import matplotlib.pyplot as plt
 import seaborn as sns
+import pandas as pd
 
-sns.set_theme(style="whitegrid", palette="muted")
+sns.set_theme(style="whitegrid", palette="colorblind")
 
 # --- 1. Гистограмма выручки по месяцам ---
 def draw_revenue_bar(df_filtered, target_col):
@@ -112,24 +113,34 @@ def draw_forecast_chart(df_monthly, y, future_X, future_pred, target_type):
 
 # --- 5. ABC ---
 def perform_abc_analysis(df_filtered):
-    # Считаем выручку по каждому товару
+    """
+    Выполняет ABC-анализ номенклатуры по выручке.
+    Возвращает датафрейм с категориями A, B, C и колонкой для прогресс-бара.
+    """
+    if 'Сумма' not in df_filtered.columns or df_filtered['Сумма'].sum() == 0:
+        return pd.DataFrame()
+
     item_revenue = df_filtered.groupby('Название')['Сумма'].sum().sort_values(ascending=False).reset_index()
+    item_revenue.rename(columns={'Сумма': 'Выручка'}, inplace=True)
     
-    # Считаем долю каждого товара и накопительную долю
-    item_revenue['Доля'] = item_revenue['Сумма'] / item_revenue['Сумма'].sum()
-    item_revenue['Накопительная доля'] = item_revenue['Доля'].cumsum()
+    total_revenue = item_revenue['Выручка'].sum()
+    item_revenue['Доля в выручке'] = (item_revenue['Выручка'] / total_revenue)
+    item_revenue['Накопительная доля'] = item_revenue['Доля в выручке'].cumsum()
     
-    # Присваиваем категории A, B, C
+    # --- НОВОЕ: Создаем колонку с процентами для ProgressColumn ---
+    # Мы умножаем долю на 100, чтобы получить удобное число для бара (например, 15.25)
+    item_revenue['Доля в %'] = item_revenue['Доля в выручке'] * 100
+    
     def assign_abc_category(share):
-        if share <= 0.8:
-            return 'A (Ключевые)'
-        elif share <= 0.95:
-            return 'B (Стабильные)'
-        else:
-            return 'C (Незначительные)'
+        if share <= 0.8: return 'A'
+        if share <= 0.95: return 'B'
+        return 'C'
     
-    item_revenue['ABC Категория'] = item_revenue['Накопительная доля'].apply(assign_abc_category)
-    return item_revenue
+    item_revenue['Категория'] = item_revenue['Накопительная доля'].apply(assign_abc_category)
+    
+    # Выбираем нужные колонки для итоговой таблицы
+    result_df = item_revenue[['Категория', 'Название', 'Выручка', 'Доля в %']]
+    return result_df
 
 # --- 6. Box Plot ---
 def draw_seasonality_chart(df_filtered, target_col):
@@ -146,3 +157,49 @@ def draw_seasonality_chart(df_filtered, target_col):
     
     sns.despine()
     return fig
+
+# --- 7. ABC Pie Chart ---
+def draw_abc_pie_chart(abc_df):
+    """Рисует круговую диаграмму, показывающую долю товаров в каждой ABC-категории."""
+    if abc_df.empty:
+        return None
+    
+    category_counts = abc_df['Категория'].value_counts()
+    
+    fig, ax = plt.subplots(figsize=(5, 4))
+    fig.patch.set_alpha(0.0)
+    
+    colors = {'A': '#2E4B4F', 'B': '#4A3A2A', 'C': '#4F2E2E'}
+    pie_colors = [colors.get(cat, '#888888') for cat in category_counts.index]
+    
+    wedges, texts, autotexts = ax.pie(
+        category_counts, 
+        labels=category_counts.index,
+        autopct=lambda p: '{:.0f} поз.'.format(p * sum(category_counts) / 100),
+        startangle=90, 
+        colors=pie_colors,
+        wedgeprops=dict(width=0.4, edgecolor='w'),
+        textprops=dict(color="white", fontsize=10, weight="bold")
+    )
+    ax.set_title("Распределение позиций по группам", color="white", fontsize=12)
+    return fig
+
+# --- 8. Profitability ---
+def analyze_profitability(df_filtered, min_sales=0):
+    profit_col = 'Валовая прибыль (%)'
+    if profit_col not in df_filtered.columns:
+        return pd.DataFrame()
+
+    # Исключаем записи с отсутствующей рентабельностью
+    df_clean = df_filtered.dropna(subset=[profit_col])
+
+    profitability = df_clean.groupby('Название').agg(
+        Средняя_рентабельность=pd.NamedAgg(column=profit_col, aggfunc='mean'),
+        Количество_продаж=pd.NamedAgg(column=profit_col, aggfunc='count')
+    )
+    # Фильтр по минимальному числу продаж, если требуется
+    if min_sales > 0:
+        profitability = profitability[profitability['Количество_продаж'] >= min_sales]
+    
+    profitability = profitability.sort_values(by='Средняя_рентабельность', ascending=False)
+    return profitability.reset_index()
