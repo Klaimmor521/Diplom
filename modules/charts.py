@@ -1,122 +1,119 @@
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
+import matplotlib.ticker as ticker
 
-sns.set_theme(style="whitegrid", palette="colorblind")
-
-# --- 1. Гистограмма выручки по месяцам ---
+# --- 1. Гистограмма по месяцам ---
 def draw_revenue_bar(df_filtered, target_col):
+    """Рисует гистограмму продаж по месяцам в новом стиле."""
     monthly_sales = df_filtered.groupby('Месяц')[target_col].sum().reset_index()
     fig, ax = plt.subplots(figsize=(8, 6))
     
-    barplot = sns.barplot(data=monthly_sales, x='Месяц', y=target_col, ax=ax, color="#5b9bd5", edgecolor="none", alpha=0.9)
+    barplot = sns.barplot(data=monthly_sales, x='Месяц', y=target_col, ax=ax, color=sns.color_palette("viridis", 1)[0], alpha=0.9)
     
     for p in barplot.patches:
-        ax.annotate(format(p.get_height(), '.0f'), 
+        ax.annotate(f"{p.get_height():.0f}", 
                     (p.get_x() + p.get_width() / 2., p.get_height()), 
-                    ha = 'center', va = 'center', 
-                    xytext = (0, 9), 
-                    textcoords = 'offset points',
-                    fontsize=8, color='#333333', rotation=45)
+                    ha='center', va='center', xytext=(0, 9), 
+                    textcoords='offset points', fontsize=8, color="black", rotation=45, weight='medium')
     
     ax.set_xlabel("")
-    
-    # Меняем подпись сбоку
     ylabel_text = "Выручка (руб)" if target_col == "Сумма" else "Количество (шт)"
-    ax.set_ylabel(ylabel_text)
-    
+    ax.set_ylabel(ylabel_text, fontsize=12)
     plt.xticks(rotation=45)
-    sns.despine(left=True)
     return fig
 
 # --- 2. Круговая диаграмма (Топ-10) ---
 def draw_top_items_pie(df_filtered, target_col):
-    # Группируем по выбранной колонке
+    """Рисует круговую диаграмму для Топ-10 в новом стиле."""
     top_items = df_filtered.groupby('Название')[target_col].sum().nlargest(10)
     fig, ax = plt.subplots(figsize=(10, 6))
     
     wedges, texts, autotexts = ax.pie(
-        top_items, 
-        labels=None,
-        autopct='%1.1f%%', 
+        top_items, labels=None, autopct='%1.1f%%', 
         startangle=140, 
-        colors=sns.color_palette("pastel"), 
-        wedgeprops=dict(width=0.4, edgecolor='w'),
+        colors=sns.color_palette("pastel", n_colors=len(top_items)),
+        wedgeprops=dict(width=0.4, edgecolor='white', linewidth=2),
         textprops=dict(color="black", fontsize=9)
     )
     
-    # Умный заголовок в зависимости от того, что считаем
     title_text = "Доля в выручке (₽)" if target_col == "Сумма" else "Доля в продажах (шт)"
     ax.set_title(title_text, pad=20)
     
-    ax.legend(
-        wedges, 
-        top_items.index, 
-        title="Названия позиций", 
-        loc="center left", 
-        bbox_to_anchor=(1, 0, 0.5, 1)
-    )
+    legend = ax.legend(wedges, top_items.index, title="Названия позиций", 
+                       loc="center left", bbox_to_anchor=(1, 0, 0.5, 1),
+                       frameon=False) # Убираем рамку у легенды
+    plt.setp(legend.get_texts(), color="black")
+    plt.setp(legend.get_title(), color="black", weight="bold")
     
     return fig
 
 # --- 3. Сравнение год к году (YoY) ---
 def draw_yoy_chart(df_filtered, target_col):
+    """Рисует график сравнения год к году с русскими названиями месяцев."""
     df_yoy = df_filtered.copy()
     df_yoy['Год'] = df_yoy['Дата'].dt.year
     df_yoy['Номер_месяца'] = df_yoy['Дата'].dt.month
-    
-    # Группируем по нужной колонке
+
     df_yoy_grouped = df_yoy.groupby(['Год', 'Номер_месяца'])[target_col].sum().reset_index()
-    
+
     fig, ax = plt.subplots(figsize=(8, 4))
-    sns.barplot(data=df_yoy_grouped, x='Номер_месяца', y=target_col, hue='Год', palette='Set2', ax=ax, edgecolor="none", alpha=0.85)
-    
-    ax.set_xlabel("Месяц (1 - Январь, 12 - Декабрь)")
-    
-    # Меняем заголовок и ось
+    sns.barplot(data=df_yoy_grouped, x='Номер_месяца', y=target_col, hue='Год',
+                palette="Set2", ax=ax, alpha=0.85)
+
+    # Русские названия месяцев
+    month_names_ru = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн',
+                      'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек']
+    ax.set_xticklabels(month_names_ru, rotation=0)
+
+    title_text = "Сравнение продаж по годам"
+    ax.set_xlabel("Месяц")
     ylabel_text = "Выручка (руб)" if target_col == "Сумма" else "Количество (шт)"
-    title_text = "Сравнение выручки по годам" if target_col == "Сумма" else "Сравнение продаж (в штуках) по годам"
-    
     ax.set_ylabel(ylabel_text)
     ax.set_title(title_text, pad=15)
-    
-    sns.despine(left=True)
+
+    if ax.get_legend() is not None:
+        ax.get_legend().set_frame_on(False)
+
     return fig
 
-# --- 4. Прогноз с заливкой (Area Chart) ---
+# --- 4. График прогноза ---
 def draw_forecast_chart(df_monthly, y, future_X, future_pred, target_type):
+    """Рисует график прогноза в новом стиле."""
     fig, ax = plt.subplots(figsize=(8, 5))
 
-    moving_average = df_monthly[y.name].rolling(window=3, center=True, min_periods=1).mean()
-    sns.lineplot(x=df_monthly['Month_ID'], y=moving_average, ax=ax, label="Скользящее среднее (Тренд)", color='#ff7f0e', linestyle=':', linewidth=2.5)
+    palette = sns.color_palette("deep", 3)
+    MA_COLOR, HISTORY_COLOR, FORECAST_COLOR = palette[2], palette[0], palette[1]
 
-    sns.lineplot(x=df_monthly['Month_ID'], y=y, ax=ax, label="Факт (История)", marker='o', color='#286090', linewidth=2.5, alpha=0.7)
-    ax.plot(future_X, future_pred, label="Прогноз (ML)", color='#d62728', linestyle='--', marker='s', linewidth=2)
+    moving_average = y.rolling(window=3, center=True, min_periods=1).mean()
+    sns.lineplot(x=df_monthly['Month_ID'], y=moving_average, ax=ax, label="Скользящее среднее", color=MA_COLOR, linestyle=':', linewidth=2.5)
+    
+    sns.lineplot(x=df_monthly['Month_ID'], y=y, ax=ax, label="Факт (История)", marker='o', color=HISTORY_COLOR, linewidth=2.5)
+    ax.plot(future_X, future_pred, label="Прогноз (ML)", color=FORECAST_COLOR, linestyle='--', marker='s', linewidth=2)
 
-    last_x_hist = df_monthly['Month_ID'].iloc[-1]
+    ax.fill_between(df_monthly['Month_ID'], y, color=HISTORY_COLOR, alpha=0.1)
+
     last_y_hist = y.iloc[-1]
-    ax.annotate(f'{last_y_hist:,.0f}', xy=(last_x_hist, last_y_hist), xytext=(-15, 15), textcoords='offset points', weight='bold', color='#286090')
+    ax.annotate(f'{last_y_hist:,.0f}', xy=(df_monthly['Month_ID'].iloc[-1], last_y_hist), 
+                xytext=(-15, 15), textcoords='offset points', weight='bold', color=HISTORY_COLOR)
 
-    last_x_pred = future_X[-1][0]
     last_y_pred = future_pred[-1]
-    ax.annotate(f'{last_y_pred:,.0f}', xy=(last_x_pred, last_y_pred), xytext=(-15, 15), textcoords='offset points', weight='bold', color='#d62728')
+    ax.annotate(f'{last_y_pred:,.0f}', xy=(future_X[-1][0], last_y_pred), 
+                xytext=(-15, 15), textcoords='offset points', weight='bold', color=FORECAST_COLOR)
 
     ax.set_title(f"Прогноз: {target_type}", pad=15)
     ax.set_xlabel("Номер месяца")
     ax.set_ylabel(target_type)
-    ax.legend(loc="upper left")
-
-    import matplotlib.ticker as ticker
     ax.xaxis.set_major_locator(ticker.MaxNLocator(integer=True))
-    sns.despine() 
+    
+    legend = ax.legend(loc="upper left", frameon=False)
+    plt.setp(legend.get_texts(), color="black")
+    
     return fig
 
-# --- 5. ABC ---
+# --- 5. Функция для ABC-анализа ---
 def perform_abc_analysis(df_filtered):
-    """
-    Выполняет ABC-анализ номенклатуры по выручке.
-    Возвращает датафрейм с категориями A, B, C и колонкой для прогресс-бара.
-    """
+    """Выполняет ABC-анализ номенклатуры по выручке."""
     if 'Сумма' not in df_filtered.columns or df_filtered['Сумма'].sum() == 0:
         return pd.DataFrame()
 
@@ -126,9 +123,6 @@ def perform_abc_analysis(df_filtered):
     total_revenue = item_revenue['Выручка'].sum()
     item_revenue['Доля в выручке'] = (item_revenue['Выручка'] / total_revenue)
     item_revenue['Накопительная доля'] = item_revenue['Доля в выручке'].cumsum()
-    
-    # --- НОВОЕ: Создаем колонку с процентами для ProgressColumn ---
-    # Мы умножаем долю на 100, чтобы получить удобное число для бара (например, 15.25)
     item_revenue['Доля в %'] = item_revenue['Доля в выручке'] * 100
     
     def assign_abc_category(share):
@@ -137,69 +131,76 @@ def perform_abc_analysis(df_filtered):
         return 'C'
     
     item_revenue['Категория'] = item_revenue['Накопительная доля'].apply(assign_abc_category)
-    
-    # Выбираем нужные колонки для итоговой таблицы
     result_df = item_revenue[['Категория', 'Название', 'Выручка', 'Доля в %']]
     return result_df
 
-# --- 6. Box Plot ---
+# --- 6. Анализ сезонности (Box Plot) ---
 def draw_seasonality_chart(df_filtered, target_col):
+    """Рисует график анализа сезонности с подписями месяцев и средней линией."""
     df_season = df_filtered.copy()
     df_season['Номер_месяца'] = df_season['Дата'].dt.month
-    
+
     fig, ax = plt.subplots(figsize=(8, 4))
-    sns.boxplot(data=df_season, x='Номер_месяца', y=target_col, ax=ax, hue='Номер_месяца', palette="coolwarm", legend=False, showfliers=False)
-    
+    sns.boxplot(data=df_season, x='Номер_месяца', y=target_col, ax=ax,
+                palette="coolwarm", showfliers=False)
+
+    # Средняя линия
+    overall_mean = df_season[target_col].mean()
+    ax.axhline(y=overall_mean, color='grey', linestyle='--', linewidth=1, alpha=0.7, label=f'Среднее ({overall_mean:,.0f})')
+
+    # Подписи месяцев
+    month_names_ru = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн',
+                  'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек']
+    ax.set_xticklabels(month_names_ru, rotation=0)
+
     ax.set_xlabel("Месяц")
     ylabel_text = "Выручка (руб)" if target_col == "Сумма" else "Количество (шт)"
     ax.set_ylabel(ylabel_text)
     ax.set_title("Анализ сезонности продаж")
-    
+    ax.legend(loc='upper right')
     sns.despine()
     return fig
 
-# --- 7. ABC Pie Chart ---
+# --- 7. Круговая диаграмма для ABC-анализа ---
 def draw_abc_pie_chart(abc_df):
-    """Рисует круговую диаграмму, показывающую долю товаров в каждой ABC-категории."""
-    if abc_df.empty:
-        return None
+    """Рисует круговую диаграмму для ABC-анализа в новом стиле."""
+    if abc_df.empty: return None
     
     category_counts = abc_df['Категория'].value_counts()
-    
     fig, ax = plt.subplots(figsize=(5, 4))
-    fig.patch.set_alpha(0.0)
     
-    colors = {'A': '#2E4B4F', 'B': '#4A3A2A', 'C': '#4F2E2E'}
-    pie_colors = [colors.get(cat, '#888888') for cat in category_counts.index]
+    colors = {'A': sns.color_palette("deep")[2], 'B': sns.color_palette("deep")[8], 'C': sns.color_palette("deep")[3]}
+    pie_colors = [colors.get(cat, '#9CA3AF') for cat in category_counts.index]
     
-    wedges, texts, autotexts = ax.pie(
+    wedges, _, autotexts = ax.pie(
         category_counts, 
         labels=category_counts.index,
-        autopct=lambda p: '{:.0f} поз.'.format(p * sum(category_counts) / 100),
+        autopct=lambda p: f'{p * sum(category_counts) / 100:.0f}\nпоз.',
         startangle=90, 
         colors=pie_colors,
-        wedgeprops=dict(width=0.4, edgecolor='w'),
-        textprops=dict(color="white", fontsize=10, weight="bold")
+        wedgeprops=dict(width=0.4, edgecolor='w', linewidth=3),
+        pctdistance=0.8,
+        textprops=dict(color="black", fontsize=10, weight="bold")
     )
-    ax.set_title("Распределение позиций по группам", color="white", fontsize=12)
+    plt.setp(autotexts, size=10, weight="bold")
+    ax.set_title("Распределение позиций по группам", fontsize=12)
     return fig
 
-# --- 8. Profitability ---
+# --- 8. Функция для анализа рентабельности (логика) ---
 def analyze_profitability(df_filtered, min_sales=0):
+    """Анализирует рентабельность позиций."""
     profit_col = 'Валовая прибыль (%)'
     if profit_col not in df_filtered.columns:
         return pd.DataFrame()
 
-    # Исключаем записи с отсутствующей рентабельностью
     df_clean = df_filtered.dropna(subset=[profit_col])
+    if df_clean.empty: return pd.DataFrame()
 
     profitability = df_clean.groupby('Название').agg(
         Средняя_рентабельность=pd.NamedAgg(column=profit_col, aggfunc='mean'),
         Количество_продаж=pd.NamedAgg(column=profit_col, aggfunc='count')
     )
-    # Фильтр по минимальному числу продаж, если требуется
     if min_sales > 0:
         profitability = profitability[profitability['Количество_продаж'] >= min_sales]
     
-    profitability = profitability.sort_values(by='Средняя_рентабельность', ascending=False)
-    return profitability.reset_index()
+    return profitability.sort_values(by='Средняя_рентабельность', ascending=False).reset_index()

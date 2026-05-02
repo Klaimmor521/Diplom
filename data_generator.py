@@ -1,18 +1,15 @@
 import pandas as pd
-import numpy as np
 import random
 from datetime import datetime, timedelta
 import sys
+import os
 
 sys.stdout.reconfigure(encoding='utf-8')
 
-def generate_livesklad_exact_copy():
-    print("Генерируем данные (LiveSklad)...")
-    
-    # Генерация
-    rows = 3500  # Строк
-    start_date = datetime(2023, 1, 1)
-    end_date = datetime(2025, 5, 1)
+def generate_data_for_year(year, num_rows=1500, filename_prefix="livesklad_report"):
+    print(f"Генерация данных за {year} год...")
+    start_date = datetime(year, 1, 1)
+    end_date = datetime(year, 12, 31)
 
     catalog = [
         # Услуги
@@ -44,11 +41,13 @@ def generate_livesklad_exact_copy():
 
     data = []
 
-    for _ in range(rows):
+    for _ in range(num_rows):
         # Генерация даты
         delta_days = (end_date - start_date).days
-        random_day = start_date + timedelta(days=random.randrange(delta_days))
+        random_day = start_date + timedelta(days=random.randrange(delta_days + 1))
         random_time = timedelta(hours=random.randint(10, 19), minutes=random.randint(0, 59))
+        final_date = random_day + random_time
+        date_str = final_date.strftime("%d.%m.%Y - %H:%M")
         final_date = random_day + random_time
         
         # Выбор товара/услуги (С учетом популярности)
@@ -102,28 +101,29 @@ def generate_livesklad_exact_copy():
         ])
 
     # DataFrame
-    columns = [
-        "Дата", 
-        "Тип документа", 
-        "Название", 
-        "Количество", 
-        "Цена", 
-        "Сумма", 
-        "Валовая прибыль (руб)", 
-        "Сотрудник"
+        columns = [
+        "Дата", "Тип документа", "Название", "Количество", "Цена", 
+        "Сумма", "Валовая прибыль (руб)", "Сотрудник"
     ]
-    
     df = pd.DataFrame(data, columns=columns)
+
+    # Добавляем колонку "Статус" уже после создания DataFrame
+    df['Статус'] = ''                           # изначально пустая строка
+    df.loc[df['Тип документа'] != 'Продажа', 'Статус'] = 'Выдан'
 
     # Сортировка по дате
     df['_temp_sort'] = pd.to_datetime(df['Дата'], format="%d.%m.%Y - %H:%M")
-    df = df.sort_values('_temp_sort')
-    df = df.drop(columns=['_temp_sort'])
+    df = df.sort_values('_temp_sort').drop(columns=['_temp_sort'])
 
-    # Сохраняем в CSV
-    filename = "data/livesklad_export.csv"
+    if not os.path.exists('data'):
+        os.makedirs('data')
+
+    filename = f"data/{filename_prefix}_{year}.csv"
     df.to_csv(filename, index=False)
-    print(f"Файл '{filename}' успешно создан! Структура совпадает со скриншотом.")
+    print(f"Файл '{filename}' успешно создан!")
+    return filename
 
 if __name__ == "__main__":
-    generate_livesklad_exact_copy()
+    generate_data_for_year(2023, num_rows=1800)
+    generate_data_for_year(2024, num_rows=2200)
+    generate_data_for_year(2025, num_rows=1200)
