@@ -5,22 +5,39 @@ import matplotlib.ticker as ticker
 
 # --- 1. Гистограмма по месяцам ---
 def draw_revenue_bar(df_filtered, target_col):
-    """Рисует гистограмму продаж по месяцам в новом стиле."""
+    """Рисует гистограмму продаж по месяцам с русскими подписями."""
+    # Получаем сумму по месяцам
     monthly_sales = df_filtered.groupby('Месяц')[target_col].sum().reset_index()
+    # Превращаем "YYYY-MM" в номер месяца
+    monthly_sales['Месяц_номер'] = pd.to_datetime(monthly_sales['Месяц']).dt.month
+
+    # Создаём полный DataFrame со всеми 12 месяцами (даже если каких-то нет)
+    all_months = pd.DataFrame({'Месяц_номер': range(1, 13)})
+    monthly_sales = all_months.merge(monthly_sales, on='Месяц_номер', how='left')
+    monthly_sales[target_col] = monthly_sales[target_col].fillna(0)  # отсутствующие = 0
+
     fig, ax = plt.subplots(figsize=(8, 6))
-    
-    barplot = sns.barplot(data=monthly_sales, x='Месяц', y=target_col, ax=ax, color=sns.color_palette("viridis", 1)[0], alpha=0.9)
-    
+    barplot = sns.barplot(data=monthly_sales, x='Месяц_номер', y=target_col, ax=ax,
+                          color=sns.color_palette("viridis", 1)[0], alpha=0.9)
+
+    # Аннотации над столбцами
     for p in barplot.patches:
-        ax.annotate(f"{p.get_height():.0f}", 
-                    (p.get_x() + p.get_width() / 2., p.get_height()), 
-                    ha='center', va='center', xytext=(0, 9), 
-                    textcoords='offset points', fontsize=8, color="black", rotation=45, weight='medium')
-    
+        height = p.get_height()
+        if height > 0:  # показываем только ненулевые
+            ax.annotate(f"{height:.0f}",
+                        (p.get_x() + p.get_width() / 2., height),
+                        ha='center', va='center', xytext=(0, 9),
+                        textcoords='offset points', fontsize=8, color="black", weight='medium')
+
+    # Русские названия месяцев
+    month_names_ru = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн',
+                      'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек']
+    ax.set_xticks(range(12))          # 12 позиций
+    ax.set_xticklabels(month_names_ru, rotation=0)
+
     ax.set_xlabel("")
     ylabel_text = "Выручка (руб)" if target_col == "Сумма" else "Количество (шт)"
     ax.set_ylabel(ylabel_text, fontsize=12)
-    plt.xticks(rotation=45)
     return fig
 
 # --- 2. Круговая диаграмма (Топ-10) ---
@@ -79,7 +96,7 @@ def draw_yoy_chart(df_filtered, target_col):
 
 # --- 4. График прогноза ---
 def draw_forecast_chart(df_monthly, y, future_X, future_pred, target_type):
-    """Рисует график прогноза в новом стиле."""
+    """Рисует график прогноза."""
     fig, ax = plt.subplots(figsize=(8, 5))
 
     palette = sns.color_palette("deep", 3)
@@ -89,7 +106,9 @@ def draw_forecast_chart(df_monthly, y, future_X, future_pred, target_type):
     sns.lineplot(x=df_monthly['Month_ID'], y=moving_average, ax=ax, label="Скользящее среднее", color=MA_COLOR, linestyle=':', linewidth=2.5)
     
     sns.lineplot(x=df_monthly['Month_ID'], y=y, ax=ax, label="Факт (История)", marker='o', color=HISTORY_COLOR, linewidth=2.5)
-    ax.plot(future_X, future_pred, label="Прогноз (ML)", color=FORECAST_COLOR, linestyle='--', marker='s', linewidth=2)
+    
+    future_X_flat = future_X.ravel()
+    ax.plot(future_X_flat, future_pred, label="Прогноз (ML)", color=FORECAST_COLOR, linestyle='--', marker='s', linewidth=2)
 
     ax.fill_between(df_monthly['Month_ID'], y, color=HISTORY_COLOR, alpha=0.1)
 
@@ -98,7 +117,8 @@ def draw_forecast_chart(df_monthly, y, future_X, future_pred, target_type):
                 xytext=(-15, 15), textcoords='offset points', weight='bold', color=HISTORY_COLOR)
 
     last_y_pred = future_pred[-1]
-    ax.annotate(f'{last_y_pred:,.0f}', xy=(future_X[-1][0], last_y_pred), 
+    last_x_pred = future_X_flat[-1]
+    ax.annotate(f'{last_y_pred:,.0f}', xy=(last_x_pred, last_y_pred), 
                 xytext=(-15, 15), textcoords='offset points', weight='bold', color=FORECAST_COLOR)
 
     ax.set_title(f"Прогноз: {target_type}", pad=15)

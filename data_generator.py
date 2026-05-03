@@ -89,6 +89,8 @@ def generate_data_for_year(year, num_rows=1500, filename_prefix="livesklad_repor
         
         employee = random.choice(employees)
 
+        profit_percent = (gross_profit / total_sum * 100) if total_sum else 0
+
         data.append([
             date_str,      # Дата
             doc_type,      # Тип документа
@@ -97,13 +99,14 @@ def generate_data_for_year(year, num_rows=1500, filename_prefix="livesklad_repor
             price,         # Цена
             total_sum,     # Сумма
             gross_profit,  # Валовая прибыль
+            profit_percent,
             employee       # Сотрудник
         ])
 
     # DataFrame
         columns = [
         "Дата", "Тип документа", "Название", "Количество", "Цена", 
-        "Сумма", "Валовая прибыль (руб)", "Сотрудник"
+        "Сумма", "Валовая прибыль (руб)", "Валовая прибыль (%)", "Сотрудник"
     ]
     df = pd.DataFrame(data, columns=columns)
 

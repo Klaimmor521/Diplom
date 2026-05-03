@@ -339,8 +339,8 @@ with tab2:
 
 # --- Вкладка 3: прогнозирование ---
 with tab3:
-    st.subheader(f"Прогноз спроса на основе данных за {selected_year} год")
-    df_monthly = df_filtered_single_year.groupby('Месяц', as_index=False)[target_col].sum()
+    st.subheader(f"Прогноз спроса на основе всех лет ({', '.join(map(str, all_years))})")
+    df_monthly = df_filtered.groupby('Месяц', as_index=False)[target_col].sum()
 
     if len(df_monthly) < 3:
         st.warning(f"⚠️ Недостаточно данных для прогноза в {selected_year} году. Нужно минимум 3 месяца с продажами.")
