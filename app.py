@@ -220,7 +220,7 @@ with tab2:
     st.subheader(f"Детальный анализ за {selected_year} год")
     st.subheader("Детальный отчет")
     with st.expander("Открыть таблицу с данными"):
-        st.dataframe(df_filtered_single_year, use_container_width=True)
+        st.dataframe(df_filtered_single_year, width='stretch')
         st.download_button("📥 Скачать в CSV", df_filtered_single_year.to_csv(index=False, encoding='utf-8-sig'), "filtered_report.csv")
     
     st.divider()
@@ -283,15 +283,15 @@ with tab2:
         with col_tabs:
             tab_a, tab_b, tab_c = st.tabs(["Группа A", "Группа B", "Группа C"])
             with tab_a:
-                st.dataframe(group_a, hide_index=True, use_container_width=True,
+                st.dataframe(group_a, hide_index=True, width='stretch',
                     column_config={"Категория": None, "Выручка": st.column_config.NumberColumn("Выручка, ₽", format="%.0f ₽"),
                                 "Доля в %": st.column_config.ProgressColumn("Доля в выручке", format="%.2f%%", min_value=0, max_value=100)})
             with tab_b:
-                st.dataframe(group_b, hide_index=True, use_container_width=True,
+                st.dataframe(group_b, hide_index=True, width='stretch',
                     column_config={"Категория": None, "Выручка": st.column_config.NumberColumn("Выручка, ₽", format="%.0f ₽"),
                                 "Доля в %": st.column_config.ProgressColumn("Доля в выручке", format="%.2f%%", min_value=0, max_value=100)})
             with tab_c:
-                st.dataframe(group_c, hide_index=True, use_container_width=True,
+                st.dataframe(group_c, hide_index=True, width='stretch',
                     column_config={"Категория": None, "Выручка": st.column_config.NumberColumn("Выручка, ₽", format="%.0f ₽"),
                                 "Доля в %": st.column_config.ProgressColumn("Доля в выручке", format="%.2f%%", min_value=0, max_value=100)})
     else:
@@ -319,7 +319,7 @@ with tab2:
                     "Средняя_рентабельность": st.column_config.NumberColumn("Рентабельность", format="%d%%"),
                     "Количество_продаж": st.column_config.NumberColumn("Продажи", format="%d"),
                 },
-                hide_index=True, use_container_width=True
+                hide_index=True, width='stretch'
             )
 
         with col_worst:
@@ -332,15 +332,35 @@ with tab2:
                     "Средняя_рентабельность": st.column_config.NumberColumn("Рентабельность", format="%d%%"),
                     "Количество_продаж": st.column_config.NumberColumn("Продажи", format="%d"),
                 },
-                hide_index=True, use_container_width=True
+                hide_index=True, width='stretch'
             )
     else:
         st.info("В отчете отсутствуют данные для анализа рентабельности за выбранный период.")
 
 # --- Вкладка 3: прогнозирование ---
 with tab3:
-    st.subheader(f"Прогноз спроса на основе всех лет ({', '.join(map(str, all_years))})")
-    df_monthly = df_filtered.groupby('Месяц', as_index=False)[target_col].sum()
+    st.subheader(f"Прогноз спроса")
+    use_all_data = st.checkbox(
+        "Использовать все загруженные данные для обучения модели",
+        value=False, # По умолчанию выключено
+        help=f"""
+        **По умолчанию (рекомендуется):** Прогноз строится на данных только за один выбранный год (`{selected_year}`). Это обеспечивает максимальную релевантность.
+
+        **При активации:** Модель будет обучаться на всем доступном периоде. Это может помочь уловить долгосрочный тренд, но старые данные могут исказить прогноз, если бизнес-модель менялась.
+        """
+    )
+
+    if use_all_data:
+        data_for_prediction = df_filtered
+        prediction_period_str = f"на основе всех лет ({', '.join(map(str, all_years))})"
+    else:
+        data_for_prediction = df_filtered_single_year
+        prediction_period_str = f"на основе данных за {selected_year} год"
+
+    st.markdown(f"**Построение прогноза {prediction_period_str}**")
+    
+    # Готовим данные для модели
+    df_monthly = data_for_prediction.groupby('Месяц', as_index=False)[target_col].sum()
 
     if len(df_monthly) < 3:
         st.warning(f"⚠️ Недостаточно данных для прогноза в {selected_year} году. Нужно минимум 3 месяца с продажами.")
@@ -367,37 +387,54 @@ with tab3:
         else:
             delta = ((avg_forecast - avg_fact) / avg_fact) * 100
 
-        types_to_check = selected_type if len(selected_type) > 0 else unique_categories
-        is_services = any(cat in types_to_check for cat in ["Услуги", "Услуга"])
-        is_goods = any(cat in types_to_check for cat in ["Запчасти", "Аксессуары", "Товар", "Прочее"])
+        active_cats = set(selected_type) if selected_type else set(unique_categories)
+
+        has_services = "Услуги" in active_cats or "Услуга" in active_cats
+        has_parts = "Запчасти" in active_cats
+        has_accessories = "Аксессуары" in active_cats
+        has_goods = "Товар" in active_cats or "Прочее" in active_cats
         
         if delta > 10:
-            st.success(f"📈 **Тренд: уверенный рост на ~{delta:.0f}%**")
-            st.write("**📝 Рекомендации:**")
-            if target_col == "Количество":
-                if is_goods:
-                    st.write("📦 **Закупки и склад:** увеличьте объём закупок пропорционально прогнозу. Сформируйте страховой запас (+15-20% к среднемесячным продажам).")
-                if is_services:
-                    st.write("👨‍🔧 **Персонал:** ожидается рост клиентского потока – проверьте загрузку мастеров, при необходимости расширьте штат.")
-            else:  # выручка
-                st.write("💰 **Бюджет:** ожидается рост денежного потока. Рекомендуется направить дополнительные средства на развитие ассортимента, маркетинг или досрочное погашение обязательств.")
+            with st.container():
+                st.success(f"**Тренд: уверенный рост на ~{delta:.0f}%**")
+                if target_col == "Количество":
+                    st.markdown("""
+                    **План действий (Ресурсы):**
+                    - **Запасы:** :green[Увеличьте] объем закупок и сформируйте страховой запас (+20%) по ключевым позициям.
+                    - **Ассортимент:** :green[Расширьте] линейку аксессуаров, особенно высокомаржинальных.
+                    - **Персонал:** :green[Проверьте] загрузку мастеров и подготовьтесь к росту клиентского потока.
+                    """)
+                else:  # Выручка
+                    st.markdown("""
+                    **План действий (Финансы и Маркетинг):**
+                    - **Инвестиции:** :green[Направьте] растущий денежный поток на закупку оборудования, рекламу или обучение.
+                    - **Средний чек:** :green[Предлагайте] более дорогие аналоги, пакетные предложения и сопутствующие услуги.
+                    """)
+
         elif delta < -10:
-            st.error(f"📉 **Тренд: прогнозируется спад на ~{abs(delta):.0f}%**")
-            st.write("**📝 Рекомендации:**")
-            if target_col == "Количество":
-                if is_goods:
-                    st.write("📦 **Закупки и склад:** приостановите новые заказы, распродавайте излишки. Пересмотрите минимальные остатки.")
-                if is_services:
-                    st.write("👨‍🔧 **Персонал:** возможна низкая загрузка – запустите акции, скидки, пересмотрите график работы.")
-            else:
-                st.write("💰 **Бюджет:** ожидается снижение выручки. Проведите аудит расходов, откажитесь от неэффективных затрат, усильте контроль дебиторской задолженности.")
+            with st.container():
+                st.error(f"**Тренд: прогнозируется спад на ~{abs(delta):.0f}%**")
+                if target_col == "Количество":
+                    st.markdown("""
+                    **План действий (Ресурсы):**
+                    - **Закупки:** :red[Приостановите] новые заказы по падающим категориям и сфокусируйтесь на распродаже излишков.
+                    - **Ассортимент:** :red[Сократите] линейку до самых оборачиваемых позиций, запустите акции на неликвиды.
+                    - **Персонал:** :red[Запустите] маркетинговые акции (скидки, комплексные предложения) для привлечения клиентов.
+                    """)
+                else:  # Выручка
+                    st.markdown("""
+                    **План действий (Финансы и Маркетинг):**
+                    - **Расходы:** :red[Проведите] аудит постоянных затрат, сократите неэффективные маркетинговые каналы.
+                    - **Спрос:** :red[Пересмотрите] ценовую политику, возможно, временно снизьте наценку для удержания клиентов.
+                    """)
         else:
-            st.info(f"⚖️ **Тренд: стабильный (изменение {delta:+.1f}%)**")
-            st.write("**📝 Рекомендации:**")
-            if target_col == "Количество":
-                st.write("Поддерживайте текущий уровень запасов, придерживайтесь плановых закупок.")
-            else:
-                st.write("Финансовые показатели стабильны. Сохраняйте текущий бюджет и инвестиционные планы.")
-            
+            with st.container():
+                st.info(f"**Тренд: стабильный (изменение {delta:+.1f}%)**")
+                st.markdown("""
+                **План действий:**
+                - **Операции:** :blue[Поддерживайте] текущий уровень складских запасов и график работы персонала.
+                - **Развитие:** :blue[Используйте] стабильный период для улучшения внутренних процессов, обучения сотрудников и внедрения новых стандартов качества.
+                """)
+
         if r2 < 30:
-            st.caption("⚠️ *Примечание: Исторические данные нестабильны. Модели сложно выявить четкий тренд. Рекомендуется принимать решения с осторожностью.*")
+            st.caption("⚠️ **Примечание:** Исторические данные крайне волатильны (R² < 30%). Это означает, что простой линейный тренд слабо описывает реальные продажи. Рекомендуется принимать решения с повышенной осторожностью и дробить закупки на более мелкие партии.")

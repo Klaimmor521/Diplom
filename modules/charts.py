@@ -32,7 +32,8 @@ def draw_revenue_bar(df_filtered, target_col):
     # Русские названия месяцев
     month_names_ru = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн',
                       'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек']
-    ax.set_xticks(range(12))          # 12 позиций
+    # Мы явно говорим, каким позициям (0, 1, 2...) какие подписи соответствуют
+    ax.set_xticks(range(len(month_names_ru)))
     ax.set_xticklabels(month_names_ru, rotation=0)
 
     ax.set_xlabel("")
@@ -81,6 +82,8 @@ def draw_yoy_chart(df_filtered, target_col):
     # Русские названия месяцев
     month_names_ru = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн',
                       'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек']
+    # Мы явно говорим, каким позициям (0, 1, 2...) какие подписи соответствуют
+    ax.set_xticks(range(len(month_names_ru)))
     ax.set_xticklabels(month_names_ru, rotation=0)
 
     title_text = "Сравнение продаж по годам"
@@ -96,35 +99,44 @@ def draw_yoy_chart(df_filtered, target_col):
 
 # --- 4. График прогноза ---
 def draw_forecast_chart(df_monthly, y, future_X, future_pred, target_type):
-    """Рисует график прогноза."""
+    """Рисует график прогноза с нумерацией месяцев, начинающейся с 1."""
     fig, ax = plt.subplots(figsize=(8, 5))
 
     palette = sns.color_palette("deep", 3)
     MA_COLOR, HISTORY_COLOR, FORECAST_COLOR = palette[2], palette[0], palette[1]
 
-    moving_average = y.rolling(window=3, center=True, min_periods=1).mean()
-    sns.lineplot(x=df_monthly['Month_ID'], y=moving_average, ax=ax, label="Скользящее среднее", color=MA_COLOR, linestyle=':', linewidth=2.5)
-    
-    sns.lineplot(x=df_monthly['Month_ID'], y=y, ax=ax, label="Факт (История)", marker='o', color=HISTORY_COLOR, linewidth=2.5)
-    
-    future_X_flat = future_X.ravel()
-    ax.plot(future_X_flat, future_pred, label="Прогноз (ML)", color=FORECAST_COLOR, linestyle='--', marker='s', linewidth=2)
+    x_history = df_monthly['Month_ID'] + 1
+    x_future = future_X.ravel() + 1
 
-    ax.fill_between(df_monthly['Month_ID'], y, color=HISTORY_COLOR, alpha=0.1)
+    moving_average = y.rolling(window=3, center=True, min_periods=1).mean()
+    sns.lineplot(x=x_history, y=moving_average, ax=ax, label="Скользящее среднее", color=MA_COLOR, linestyle=':', linewidth=2.5)
+    
+    sns.lineplot(x=x_history, y=y, ax=ax, label="Факт (История)", marker='o', color=HISTORY_COLOR, linewidth=2.5)
+    
+    ax.plot(x_future, future_pred, label="Прогноз (ML)", color=FORECAST_COLOR, linestyle='--', marker='s', linewidth=2)
+
+    ax.fill_between(x_history, y, color=HISTORY_COLOR, alpha=0.1)
 
     last_y_hist = y.iloc[-1]
-    ax.annotate(f'{last_y_hist:,.0f}', xy=(df_monthly['Month_ID'].iloc[-1], last_y_hist), 
+    ax.annotate(f'{last_y_hist:,.0f}', xy=(x_history.iloc[-1], last_y_hist), 
                 xytext=(-15, 15), textcoords='offset points', weight='bold', color=HISTORY_COLOR)
 
     last_y_pred = future_pred[-1]
-    last_x_pred = future_X_flat[-1]
+    last_x_pred = x_future[-1]
     ax.annotate(f'{last_y_pred:,.0f}', xy=(last_x_pred, last_y_pred), 
                 xytext=(-15, 15), textcoords='offset points', weight='bold', color=FORECAST_COLOR)
 
     ax.set_title(f"Прогноз: {target_type}", pad=15)
     ax.set_xlabel("Номер месяца")
     ax.set_ylabel(target_type)
-    ax.xaxis.set_major_locator(ticker.MaxNLocator(integer=True))
+    total_months = int(x_future[-1] - x_history.iloc[0] + 1)
+    
+    if total_months > 24:
+        step = max(1, total_months // 12)
+    else:
+        step = 1
+    ax.xaxis.set_major_locator(ticker.MultipleLocator(step))
+    ax.set_xlim(left=0.5)
     
     legend = ax.legend(loc="upper left", frameon=False)
     plt.setp(legend.get_texts(), color="black")
@@ -161,8 +173,8 @@ def draw_seasonality_chart(df_filtered, target_col):
     df_season['Номер_месяца'] = df_season['Дата'].dt.month
 
     fig, ax = plt.subplots(figsize=(8, 4))
-    sns.boxplot(data=df_season, x='Номер_месяца', y=target_col, ax=ax,
-                palette="coolwarm", showfliers=False)
+    sns.boxplot(data=df_season, x='Номер_месяца', y=target_col, ax=ax, hue='Номер_месяца',
+                palette="coolwarm", showfliers=False, legend=False)
 
     # Средняя линия
     overall_mean = df_season[target_col].mean()
@@ -170,7 +182,9 @@ def draw_seasonality_chart(df_filtered, target_col):
 
     # Подписи месяцев
     month_names_ru = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн',
-                  'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек']
+                      'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек']
+    # Мы явно говорим, каким позициям (0, 1, 2...) какие подписи соответствуют
+    ax.set_xticks(range(len(month_names_ru)))
     ax.set_xticklabels(month_names_ru, rotation=0)
 
     ax.set_xlabel("Месяц")
