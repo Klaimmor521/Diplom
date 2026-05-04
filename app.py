@@ -221,7 +221,6 @@ with tab2:
     st.subheader("Детальный отчет")
     with st.expander("Открыть таблицу с данными"):
         st.dataframe(df_filtered_single_year, width='stretch')
-        st.download_button("📥 Скачать в CSV", df_filtered_single_year.to_csv(index=False, encoding='utf-8-sig'), "filtered_report.csv")
     
     st.divider()
     st.subheader("ABC-анализ номенклатуры", help="Делит все позиции на 3 группы по их вкладу в общую выручку. Анализируется только по Выручке.")
