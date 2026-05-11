@@ -4,7 +4,6 @@ import streamlit as st
 @st.cache_data
 def load_data(file_path_or_buffer):
     try:
-        # Проверяем, это загруженный файл или тестовый
         if hasattr(file_path_or_buffer, 'name'):
             file_name = file_path_or_buffer.name
         else:
@@ -33,7 +32,7 @@ def load_data(file_path_or_buffer):
             
         df['Месяц'] = df['Дата'].dt.to_period('M').astype(str)
 
-        if df['Валовая прибыль (руб)'].dtype == object: # Если прочиталось как текст
+        if df['Валовая прибыль (руб)'].dtype == object:
             df['Валовая прибыль (руб)'] = df['Валовая прибыль (руб)'].astype(str).str.replace(',', '.').astype(float)
             
         if df['Сумма'].dtype == object:

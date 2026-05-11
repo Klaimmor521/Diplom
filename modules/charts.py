@@ -6,12 +6,9 @@ import matplotlib.ticker as ticker
 # --- 1. Гистограмма по месяцам ---
 def draw_revenue_bar(df_filtered, target_col):
     """Рисует гистограмму продаж по месяцам с русскими подписями."""
-    # Получаем сумму по месяцам
     monthly_sales = df_filtered.groupby('Месяц')[target_col].sum().reset_index()
-    # Превращаем "YYYY-MM" в номер месяца
     monthly_sales['Месяц_номер'] = pd.to_datetime(monthly_sales['Месяц']).dt.month
 
-    # Создаём полный DataFrame со всеми 12 месяцами (даже если каких-то нет)
     all_months = pd.DataFrame({'Месяц_номер': range(1, 13)})
     monthly_sales = all_months.merge(monthly_sales, on='Месяц_номер', how='left')
     monthly_sales[target_col] = monthly_sales[target_col].fillna(0)  # отсутствующие = 0
@@ -23,16 +20,14 @@ def draw_revenue_bar(df_filtered, target_col):
     # Аннотации над столбцами
     for p in barplot.patches:
         height = p.get_height()
-        if height > 0:  # показываем только ненулевые
+        if height > 0:
             ax.annotate(f"{height:.0f}",
                         (p.get_x() + p.get_width() / 2., height),
                         ha='center', va='center', xytext=(0, 9),
                         textcoords='offset points', fontsize=8, color="black", weight='medium')
 
-    # Русские названия месяцев
     month_names_ru = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн',
                       'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек']
-    # Мы явно говорим, каким позициям (0, 1, 2...) какие подписи соответствуют
     ax.set_xticks(range(len(month_names_ru)))
     ax.set_xticklabels(month_names_ru, rotation=0)
 
@@ -79,10 +74,8 @@ def draw_yoy_chart(df_filtered, target_col):
     sns.barplot(data=df_yoy_grouped, x='Номер_месяца', y=target_col, hue='Год',
                 palette="Set2", ax=ax, alpha=0.85)
 
-    # Русские названия месяцев
     month_names_ru = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн',
                       'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек']
-    # Мы явно говорим, каким позициям (0, 1, 2...) какие подписи соответствуют
     ax.set_xticks(range(len(month_names_ru)))
     ax.set_xticklabels(month_names_ru, rotation=0)
 
@@ -180,10 +173,8 @@ def draw_seasonality_chart(df_filtered, target_col):
     overall_mean = df_season[target_col].mean()
     ax.axhline(y=overall_mean, color='grey', linestyle='--', linewidth=1, alpha=0.7, label=f'Среднее ({overall_mean:,.0f})')
 
-    # Подписи месяцев
     month_names_ru = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн',
                       'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек']
-    # Мы явно говорим, каким позициям (0, 1, 2...) какие подписи соответствуют
     ax.set_xticks(range(len(month_names_ru)))
     ax.set_xticklabels(month_names_ru, rotation=0)
 
@@ -220,7 +211,7 @@ def draw_abc_pie_chart(abc_df):
     ax.set_title("Распределение позиций по группам", fontsize=12)
     return fig
 
-# --- 8. Функция для анализа рентабельности (логика) ---
+# --- 8. Функция для анализа рентабельности ---
 def analyze_profitability(df_filtered, min_sales=0):
     """Анализирует рентабельность позиций."""
     profit_col = 'Валовая прибыль (%)'
