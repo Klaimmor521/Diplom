@@ -4,7 +4,7 @@ env/
 
 __pycache__/
 
-data/*.csv
-data/*.xlsx
+# data/*.csv
+# data/*.xlsx
 
 .vscode/

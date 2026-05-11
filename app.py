@@ -3,6 +3,7 @@ import seaborn as sns
 import numpy as np
 import pandas as pd
 import hashlib
+import os
 
 from modules.data_processor import load_data, classify_smart
 from modules.charts import (
@@ -45,10 +46,10 @@ uploaded_files = st.sidebar.file_uploader(
     accept_multiple_files=True
 )
 
-# Создаем пустой DataFrame, который будем наполнять
 df = None
 data_frames = []
 seen_hashes = set()
+is_demo_mode = False
 
 if uploaded_files:
     # Если пользователь загрузил файлы, читаем и собираем их
@@ -59,7 +60,7 @@ if uploaded_files:
         file.seek(0)  # возвращаем курсор в начало для чтения в load_data
         
         if file_hash in seen_hashes:
-            st.warning(f"Файл '{file.name}' уже был загружен (по содержимому). Пропускаем дубликат.")
+            st.warning(f"Файл '{file.name}' уже был загружен. Пропускаем дубликат.")
             continue
         seen_hashes.add(file_hash)
         
@@ -69,12 +70,11 @@ if uploaded_files:
 else:
     test_files = ["data/livesklad_report_2023.csv", "data/livesklad_report_2024.csv", "data/livesklad_report_2025.csv"]
     for file_path in test_files:
-        try:
+        if os.path.exists(file_path):
             df = load_data(file_path)
             if df is not None:
                 data_frames.append(df)
-        except FileNotFoundError:
-            pass # Игнорируем, если тестового файла нет
+                is_demo_mode = True # Включаем флажок демо-режима
 
 # Если удалось собрать хотя бы один DataFrame, объединяем их
 if data_frames:
@@ -83,6 +83,9 @@ if data_frames:
 if df is None:
     st.warning("Пожалуйста, загрузите файл(ы) с данными для начала анализа.")
     st.stop()
+
+if is_demo_mode:
+    st.info("💡 **Внимание:** Система работает в демонстрационном режиме на основе тестовых данных. Чтобы проанализировать свои продажи, загрузите файлы в панели слева (тестовые данные будут скрыты).")
 
 # --- Фильтры---
 st.sidebar.header("⚙️ Настройки фильтрации")
